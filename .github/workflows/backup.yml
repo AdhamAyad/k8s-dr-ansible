@@ -1,0 +1,43 @@
+name: K8s DR Automated Backup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  infrastructure:
+    name: Provision S3 via Terraform
+    runs-on: self-hosted
+
+    defaults:
+      run:
+        working-directory: ./terraform
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+
+      - name: Extract Terraform Outputs
+        id: tf_out
+        run: echo "BUCKET_NAME=$(terraform output -raw backup_bucket_name)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Bucket Name
+        run: echo "Success The S3 bucket for backups is ${{ steps.tf_out.outputs.BUCKET_NAME }}"
