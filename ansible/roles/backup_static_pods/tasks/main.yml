@@ -1,0 +1,28 @@
+---
+# tasks file for roles/backup_static_pods
+- name: Check if manifests directory exists
+  ansible.builtin.stat:
+    path: /etc/kubernetes/manifests
+  register: manifests_dir
+
+- name: Create temporary archive of Static Pods manifests
+  ansible.builtin.archive:
+    path: /etc/kubernetes/manifests/
+    dest: /tmp/manifests_backup_{{ ansible_hostname }}.tar.gz
+    format: gz
+  become: true
+  when: manifests_dir.stat.exists and manifests_dir.stat.isdir
+
+- name: Fetch manifests archive to local backup directory
+  ansible.builtin.fetch:
+    src: /tmp/manifests_backup_{{ ansible_hostname }}.tar.gz
+    dest: "{{ local_backup_path }}/static_pods/manifests_{{ ansible_hostname }}.tar.gz"
+    flat: yes
+  when: manifests_dir.stat.exists and manifests_dir.stat.isdir
+
+- name: Remove temporary manifests archive from node
+  ansible.builtin.file:
+    path: /tmp/manifests_backup_{{ ansible_hostname }}.tar.gz
+    state: absent
+  become: true
+  when: manifests_dir.stat.exists and manifests_dir.stat.isdir

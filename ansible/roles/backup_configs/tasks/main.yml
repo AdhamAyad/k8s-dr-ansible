@@ -1,0 +1,28 @@
+---
+# tasks file for roles/backup_configs
+- name: Create temporary archive of ALL Kubernetes and Infra configs
+  ansible.builtin.archive:
+    path:
+      - /etc/kubernetes/*.conf
+      - /var/lib/kubelet/config.yaml
+      - /var/lib/kubelet/kubeadm-flags.env
+      - /etc/cni/net.d/
+      - /etc/containerd/config.toml
+    dest: /tmp/configs_backup.tar.gz
+    format: gz
+  become: true
+  run_once: true
+
+- name: Fetch configs archive to local backup directory
+  ansible.builtin.fetch:
+    src: /tmp/configs_backup.tar.gz
+    dest: "{{ local_backup_path }}/configs/configs_backup_{{ ansible_hostname }}.tar.gz"
+    flat: yes
+  run_once: true
+
+- name: Remove temporary configs archive from master
+  ansible.builtin.file:
+    path: /tmp/configs_backup.tar.gz
+    state: absent
+  become: true
+  run_once: true

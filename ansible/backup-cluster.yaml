@@ -1,0 +1,25 @@
+---
+- name: Test Local Prep Role
+  hosts: master
+  become: true
+
+  roles:
+    - role: local_prep
+      vars:
+        base_backup_dir: "/home/Adham/k8s-dr-ansible"
+    - role: backup_etcd
+    - role: backup_pki
+    - role: backup_configs
+      #    - role: backup_velero
+
+- name: Backup Static Pods from ALL nodes
+  hosts: all
+  become: true
+  pre_tasks:
+    - name: Share the local backup path from the master to all workers
+      ansible.builtin.set_fact:
+        local_backup_path: "{{ hostvars[groups['master'][0]]['local_backup_path'] }}"
+      when: inventory_hostname != groups['master'][0]
+
+  roles:
+    - role: backup_static_pods

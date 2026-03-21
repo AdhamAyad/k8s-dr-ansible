@@ -1,0 +1,15 @@
+---
+# tasks file for local_prep
+- name: reeze the final backup path with today's date
+  set_fact:
+    local_backup_path: "{{ base_backup_dir }}/backup_{{ lookup('pipe', 'date +%Y-%m-%d_%H-%M') }}"
+  run_once: true
+
+- name: Create the local backup directory
+  ansible.builtin.file:
+    path: "{{ local_backup_path }}"
+    state: directory
+    mode: '0755'
+  become: false    
+  delegate_to: localhost
+  run_once: true

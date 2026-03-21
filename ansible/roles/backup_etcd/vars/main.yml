@@ -1,0 +1,4 @@
+---
+# vars file for roles/backup_etcd
+etcd_cert_dir: "/etc/kubernetes/pki/etcd"
+etcd_snapshot_path: "/tmp/etcd-backup.db"

@@ -1,0 +1,62 @@
+---
+# tasks file for roles/backup_etcd
+- name: Check if etcdctl is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/etcdctl
+  register: etcdctl_check
+
+- name: Install etcdctl binary if missing
+  block:
+    - name: Download etcd binary from GitHub
+      ansible.builtin.get_url:
+        url: "https://github.com/etcd-io/etcd/releases/download/v3.5.12/etcd-v3.5.12-linux-amd64.tar.gz"
+        dest: "/tmp/etcd.tar.gz"
+
+    - name: Extract etcd archive
+      ansible.builtin.unarchive:
+        src: "/tmp/etcd.tar.gz"
+        dest: "/tmp"
+        remote_src: yes
+
+    - name: Move etcdctl to executable path
+      ansible.builtin.copy:
+        src: "/tmp/etcd-v3.5.12-linux-amd64/etcdctl"
+        dest: "/usr/local/bin/etcdctl"
+        mode: '0755'
+        remote_src: yes
+  when: not etcdctl_check.stat.exists
+  run_once: true
+
+- name: Take etcd snapshot inside the pod (mapped to host path)
+  shell: |
+    ETCDCTL_API=3 /usr/local/bin/etcdctl \
+    --endpoints=https://127.0.0.1:2379 \
+    --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+    --cert=/etc/kubernetes/pki/etcd/server.crt \
+    --key=/etc/kubernetes/pki/etcd/server.key \
+    snapshot save {{ etcd_snapshot_path }}
+  run_once: true
+
+- name: Verify the integrity of the etcd snapshot
+  ansible.builtin.shell: |
+    ETCDCTL_API=3 /usr/local/bin/etcdctl --write-out=table snapshot status {{ etcd_snapshot_path }}
+  register: snapshot_status
+  run_once: true
+
+- name: Display etcd snapshot status
+  ansible.builtin.debug:
+    msg: "{{ snapshot_status.stdout_lines }}"
+  run_once: true
+
+- name: Fetch the snapshot to the Ansible Control Node
+  ansible.builtin.fetch:
+    src: "{{ etcd_snapshot_path }}"  
+    dest: "{{ local_backup_path }}/etcd/etcd-snapshot-{{ ansible_hostname }}-{{ ansible_date_time.date }}_{{ ansible_date_time.hour }}-{{ ansible_date_time.minute }}.db"
+    flat: yes
+  run_once: true
+
+- name: Cleanup temporary snapshot from master node host path
+  file:
+    path: "{{ etcd_snapshot_path }}"
+    state: absent
+  run_once: true

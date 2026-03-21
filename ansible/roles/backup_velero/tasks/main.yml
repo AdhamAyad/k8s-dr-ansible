@@ -1,0 +1,21 @@
+---
+# tasks file for roles/backup_velero
+- name: Create a unique timestamp for the Velero backup
+  ansible.builtin.set_fact:
+    velero_backup_name: "cluster-backup-{{ lookup('pipe', 'date +%Y-%m-%d-%H-%M') }}"
+
+- name: Trigger Velero to backup all namespaces and volumes to S3
+  ansible.builtin.command: >
+    /usr/local/bin/velero backup create {{ velero_backup_name }}
+    --include-namespaces=*
+    --default-volumes-to-fs-backup
+    --wait
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: velero_status
+
+- name: Show Velero backup summary
+  ansible.builtin.debug:
+    msg: 
+      - "Velero Backup Started: {{ velero_backup_name }}"
+      - "{{ velero_status.stdout_lines }}"

@@ -1,0 +1,3 @@
+---
+# defaults file for local_prep
+base_backup_dir: "/opt/k8s_backups"
