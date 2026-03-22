@@ -1,0 +1,72 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etcd-s3-backup
+  namespace: kube-system
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          hostNetwork: true
+          nodeName: creativehere
+          restartPolicy: OnFailure
+          initContainers:
+          - name: take-etcd-snapshot
+            image: quay.io/coreos/etcd:v3.5.0
+            command:
+            - /bin/sh
+            - -c
+            - |
+              export ETCDCTL_API=3
+              etcdctl --endpoints=https://127.0.0.1:2379 \
+                --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+                --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt \
+                --key=/etc/kubernetes/pki/etcd/healthcheck-client.key \
+                snapshot save /shared-data/etcd-snapshot.db
+            volumeMounts:
+            - name: etcd-certs
+              mountPath: /etc/kubernetes/pki/etcd
+              readOnly: true
+            - name: shared-data
+              mountPath: /shared-data
+          containers:
+          - name: upload-to-s3
+            image: amazon/aws-cli:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+              aws s3 cp /shared-data/etcd-snapshot.db s3://$S3_BUCKET_NAME/daily_cron_$TIMESTAMP/etcd-snapshot.db
+              echo "Backup successfully uploaded to S3!"
+            env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-s3-creds
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-s3-creds
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: S3_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: aws-s3-creds
+                  key: S3_BUCKET_NAME
+            - name: AWS_DEFAULT_REGION
+              value: "us-east-1"
+            volumeMounts:
+            - name: shared-data
+              mountPath: /shared-data
+          volumes:
+          - name: etcd-certs
+            hostPath:
+              path: /etc/kubernetes/pki/etcd
+              type: Directory
+          - name: shared-data
+            emptyDir: {}
