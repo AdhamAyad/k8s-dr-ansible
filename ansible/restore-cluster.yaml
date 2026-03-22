@@ -1,0 +1,7 @@
+---
+- name: Download Backup from AWS S3 to Ansible Host
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  roles:
+    - role: download_from_s3

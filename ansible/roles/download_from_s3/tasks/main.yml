@@ -1,0 +1,21 @@
+---
+# tasks file for ansible/roles/download_from_s3
+- name: Ensure local restore directory exists
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/{{ backup_folder_name }}"
+    state: directory
+    mode: '0755'
+
+- name: Download backup folder from S3
+  ansible.builtin.shell: >
+    /usr/local/bin/aws s3 sync "s3://{{ s3_bucket_name }}/{{ backup_folder_name }}/" "{{ playbook_dir }}/{{ backup_folder_name }}/"
+  environment:
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_SESSION_TOKEN: "{{ lookup('env', 'AWS_SESSION_TOKEN') }}"
+    AWS_DEFAULT_REGION: "{{ lookup('env', 'AWS_REGION') }}"
+  register: s3_download_result
+
+- name: Print Download Status
+  ansible.builtin.debug:
+    msg: "Backup successfully downloaded! Local Path: {{ playbook_dir }}/{{ backup_folder_name }}/"
