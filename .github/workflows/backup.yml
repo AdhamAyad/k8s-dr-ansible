@@ -43,3 +43,8 @@ jobs:
         run: |
           ansible-playbook backup-cluster.yaml \
           -e "s3_bucket_name=${{ steps.tf_out.outputs.BUCKET_NAME }}"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ env.AWS_SESSION_TOKEN }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
