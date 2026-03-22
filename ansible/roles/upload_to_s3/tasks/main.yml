@@ -3,6 +3,11 @@
 - name: Sync local backup folder to S3 bucket
   ansible.builtin.shell: >
     /usr/local/bin/aws s3 sync "{{ local_backup_path }}" "s3://{{ s3_bucket_name }}/{{ local_backup_path | basename }}/"
+  environment:
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_SESSION_TOKEN: "{{ lookup('env', 'AWS_SESSION_TOKEN') }}"
+    AWS_DEFAULT_REGION: "{{ lookup('env', 'AWS_REGION') }}"
   register: s3_upload_result
 
 - name: Print Upload Status
