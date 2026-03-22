@@ -23,3 +23,13 @@
 
   roles:
     - role: backup_static_pods
+
+- name: Upload Final Backup to AWS S3
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars:
+    local_backup_path: "{{ hostvars[groups['master'][0]]['local_backup_path'] }}"
+
+  roles:
+    - role: upload_to_s3

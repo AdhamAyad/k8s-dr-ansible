@@ -1,0 +1,10 @@
+---
+# tasks file for roles/upload_to_s3
+- name: Sync local backup folder to S3 bucket
+  ansible.builtin.command: >
+    aws s3 sync {{ local_backup_path }} s3://{{ s3_bucket_name }}/cluster-backup-{{ ansible_date_time.date }}/
+  register: s3_upload_result
+
+- name: Print Upload Status
+  ansible.builtin.debug:
+    msg: "Backup successfully uploaded! S3 Path: s3://{{ s3_bucket_name }}/cluster-backup-{{ ansible_date_time.date }}/"
