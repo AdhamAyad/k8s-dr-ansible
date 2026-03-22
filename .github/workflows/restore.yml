@@ -1,0 +1,54 @@
+name: K8s DR Automated Restore
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_folder_name:
+        description: 'S3 backup folder name (e.g., backup_2026-03-22_04-18)'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  restore_pipeline:
+    name: Restore Kubernetes Cluster
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        id: aws_creds
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          output-credentials: true
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
+
+      - name: Extract Terraform Outputs
+        id: tf_out
+        working-directory: ./terraform
+        run: echo "BUCKET_NAME=$(terraform output -raw backup_bucket_name)" >> "$GITHUB_OUTPUT"
+
+      - name: Run Ansible Restore Pipeline
+        working-directory: ./ansible
+        run: |
+          ansible-playbook restore-cluster.yaml \
+          -e "s3_bucket_name=${{ steps.tf_out.outputs.BUCKET_NAME }}" \
+          -e "backup_folder_name=${{ github.event.inputs.backup_folder_name }}"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ steps.aws_creds.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.aws_creds.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.aws_creds.outputs.aws-session-token }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
