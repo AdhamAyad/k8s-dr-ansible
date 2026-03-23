@@ -34,9 +34,28 @@
 - name: Wait 10 seconds to ensure ETCD pod is fully terminated
   ansible.builtin.pause:
     seconds: 10
+- name: Check if etcdutl is installed
+  ansible.builtin.command: which etcdutl
+  register: etcdutl_check
+  ignore_errors: yes
+
+- name: Download and extract etcd binaries (if missing)
+  ansible.builtin.unarchive:
+    src: "https://github.com/etcd-io/etcd/releases/download/v3.5.0/etcd-v3.5.0-linux-amd64.tar.gz"
+    dest: /tmp/
+    remote_src: yes
+  when: etcdutl_check.rc != 0
+
+- name: Install etcdutl to /usr/local/bin
+  ansible.builtin.copy:
+    src: /tmp/etcd-v3.5.0-linux-amd64/etcdutl
+    dest: /usr/local/bin/etcdutl
+    mode: '0755'
+    remote_src: yes
+  when: etcdutl_check.rc != 0
 
 - name: Step 2 - Extract the Snapshot to a New Directory
-  ansible.builtin.shell: /usr/local/bin/etcdctl snapshot restore /opt/backup/etcd-snapshot.db --data-dir /var/lib/etcd-restored
+  ansible.builtin.shell: /usr/local/bin/etcdutl snapshot restore /opt/backup/etcd-snapshot.db --data-dir /var/lib/etcd-restored
 
 - name: Step 3 - Clear the Corrupted Data Directory
   ansible.builtin.shell: rm -rf /var/lib/etcd/*
