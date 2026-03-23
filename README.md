@@ -1,82 +1,85 @@
-# Kubernetes Disaster Recovery - Automated Ansible & Terraform Solution
+# Kubernetes Disaster Recovery - Full Cluster and Workload Recovery Solution
 
 ## Overview
-This project provides a comprehensive Disaster Recovery (DR) and Backup framework for self-managed Kubernetes clusters. It leverages Terraform for AWS infrastructure management (S3 and OIDC), Ansible for cluster-level backup/restore operations, and GitHub Actions for CI/CD pipeline automation.
+This project provides an enterprise-grade Disaster Recovery (DR) solution for self-managed Kubernetes clusters. It covers two critical recovery layers:
+1. Control Plane Recovery: Manual and automated backups of ETCD, PKI, and Static Pods using Ansible.
+2. Application Data Recovery: Backup and restore of persistent volumes and cluster resources using Velero.
+The entire infrastructure, including secure GitHub Actions access via OIDC and S3 storage, is managed by Terraform.
 
 ## Project Structure
-The repository is organized into four main functional areas:
-- **ansible/**: Contains roles for ETCD snapshots, PKI certificate backups, Static Pod manifests, and K8s configurations.
-- **terraform/**: Manages S3 buckets for state and backups, and configures GitHub OIDC authentication.
-- **kubernetes/**: Defines CronJobs for scheduled on-cluster backup tasks.
-- **cicd**: GitHub Actions workflows for automated recovery triggered by S3 events or manual dispatch.
+- ansible/: Contains playbooks and roles for infrastructure-level backup/restore.
+- terraform/: Provisions S3 buckets and IAM OIDC roles for secure cloud interaction.
+- kubernetes/: K8s-native CronJobs for automated control plane backups to S3.
+- backup_velero/: Ansible role dedicated to triggering and managing Velero backups for stateful applications.
 
 ## Prerequisites
-- AWS CLI configured with appropriate permissions.
+- AWS CLI configured with administrative access for initial setup.
 - Terraform v1.7+ and Ansible v2.15+.
-- A running Kubernetes cluster (Master and Worker nodes).
-- SSH access to all cluster nodes from the Ansible controller.
+- Velero CLI installed and configured on the cluster.
+- Kubernetes cluster with Master and Worker nodes.
 
-## 1. Infrastructure Provisioning (Terraform)
-The infrastructure layer creates the necessary S3 buckets and IAM roles with OIDC provider for secure GitHub Actions integration.
+## 1. Infrastructure Setup (Terraform)
+The infrastructure layer establishes secure OIDC authentication for GitHub Actions and provisions the S3 backend for all backup data.
 
 ```bash
 cd terraform
 terraform init
 terraform apply -var="github_repo=AdhamAyad/k8s-dr-ansible"
 ```
-**Key Components:**
-- **S3 Buckets**: Managed in `s3.tf` for Terraform state and DR archives.
-- **OIDC Module**: Managed in `modules/github-oidc` to eliminate the need for long-lived AWS Access Keys.
 
-## 2. Backup Strategy (Ansible & K8s)
-The project supports both manual and scheduled backups.
+Components managed:
+- S3 Buckets: Dedicated buckets for Terraform state, Velero backups, and Ansible DR archives.
+- GitHub OIDC Module: A modular IAM configuration that allows GitHub Actions to assume roles without using static AWS credentials.
 
-### Automated Backups
-Scheduled backups are handled by Kubernetes CronJobs located in the `kubernetes/` directory, which sync data directly to S3.
+## 2. Backup Strategy
+The project implements a dual-stream backup approach:
+
+### Control Plane Backup (Ansible)
+Captures the essential state of the Kubernetes control plane:
+- ETCD: Encrypted snapshots of the cluster database.
+- PKI: Full backup of /etc/kubernetes/pki certificates.
+- Configs/Static Pods: Node-specific manifests and Kubelet configurations.
+
+### Persistent Workload Backup (Velero)
+Integrated through the `backup_velero` role to handle:
+- Persistent Volume (PV) snapshots.
+- Namespaced resources (Deployments, Secrets, PVCs).
+- Data is offloaded to the designated S3 bucket.
+
+### Automation
+On-cluster automation is handled via Kubernetes CronJobs (`kubernetes/cronJob-s3.yaml`) to ensure periodic synchronization of local data to S3.
+
+## 3. Disaster Recovery and Restoration
+The restoration process is designed to recover from a total cluster failure or data corruption.
+
+### Automated Restore (GitHub Actions)
+Triggered via Workflow Dispatch. Requires the S3 backup folder name as input.
+
+### Manual Execution
 ```bash
-kubectl apply -f kubernetes/pvc.yaml
-kubectl apply -f kubernetes/cronJob-s3.yaml
+ansible-playbook -i ansible/inventory ansible/restore-cluster.yaml -e "backup_folder_name=backup_YYYY-MM-DD"
 ```
 
-### Manual Backup
-Run the backup playbook to capture the current state of the control plane:
+Restoration Logic:
+1. Download: Retrieves the specific backup archive from AWS S3.
+2. Control Plane Restore: Restores ETCD state and PKI certificates.
+3. Manifest Bouncing: A specialized step that cycles static pod manifests to force Kubelet to re-register Mirror Pods with the API Server.
+4. Velero Restore: Triggers Velero to restore application-level data and persistent volumes from S3.
+
+## 4. Verification and Health Check
+Post-restoration, verify cluster stability using the following:
 ```bash
-ansible-playbook -i ansible/inventory ansible/backup-cluster.yaml
-```
-**Captured Data:**
-- ETCD Snapshot (encrypted).
-- `/etc/kubernetes/pki` directory.
-- `/etc/kubernetes/manifests` (Static Pods).
-- Core configuration files (`kubelet.conf`, etc.).
-
-## 3. Disaster Recovery Process (Restore)
-The restore process is designed to handle total control plane failure.
-
-### Execution via GitHub Actions
-1. Navigate to GitHub Actions -> Restore Cluster.
-2. Select 'Run workflow'.
-3. Input the `backup_folder_name` (e.g., `backup_2026-03-22_04-18`).
-
-### Manual Restore logic
-The restore playbook performs the following critical steps:
-1. **Download**: Fetches the specified backup from S3.
-2. **ETCD Restore**: Stops the API server and restores the ETCD data directory.
-3. **PKI/Configs**: Restores certificates and control plane configurations.
-4. **Manifest Bouncing**: A critical post-restore step that moves static pod manifests out of `/etc/kubernetes/manifests` and back in. This forces the Kubelet to re-register Mirror Pods with the API server, solving potential synchronization conflicts after an ETCD state change.
-
-```bash
-ansible-playbook -i ansible/inventory ansible/restore-cluster.yaml -e "backup_folder_name=YOUR_BACKUP_NAME"
-```
-
-## 4. Verification
-After the restoration completes, verify the cluster health:
-```bash
+# Verify node status
 kubectl get nodes
-kubectl get pods -A
-```
-Ensure all control plane components (etcd, api-server, scheduler) are running and the Node status is 'Ready'.
 
-## Security Considerations
-- **OIDC Authentication**: GitHub Actions assumes an IAM Role via Web Identity, adhering to the principle of least privilege.
-- **State Locking**: Terraform state is stored in a dedicated S3 bucket to prevent concurrent infrastructure changes.
-- **Data Integrity**: Backups are archived and timestamped to prevent accidental overwrites.
+# Verify all control plane components and application pods
+kubectl get pods -A
+
+# Verify Velero restore status
+velero restore get
+```
+
+## Security and Compliance
+- Identity Federation: Uses OIDC for GitHub Actions to minimize credential exposure.
+- Storage Isolation: Separate S3 paths for infrastructure state and backup data.
+- Idempotency: Ansible roles are designed to be run multiple times without causing side effects.
