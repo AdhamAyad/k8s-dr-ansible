@@ -1,4 +1,3 @@
-```markdown
 # Kubernetes Disaster Recovery - Automated Ansible & Terraform Solution
 
 ## Overview
