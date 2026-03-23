@@ -54,6 +54,11 @@
     remote_src: yes
   when: etcdutl_check.rc != 0
 
+- name: Ensure old restored directory is removed before extraction
+  ansible.builtin.file:
+    path: /var/lib/etcd-restored
+    state: absent    
+
 - name: Step 2 - Extract the Snapshot to a New Directory
   ansible.builtin.shell: /usr/local/bin/etcdutl snapshot restore /opt/backup/etcd-snapshot.db --data-dir /var/lib/etcd-restored
 
