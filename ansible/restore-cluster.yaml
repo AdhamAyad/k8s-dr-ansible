@@ -5,3 +5,10 @@
   gather_facts: no
   roles:
     - role: download_from_s3
+
+- name: K8s Disaster Recovery - Restore etcd
+  hosts: master
+  become: yes
+  gather_facts: yes
+  roles:
+    - role: restore_etcd
