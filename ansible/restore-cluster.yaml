@@ -6,7 +6,7 @@
   roles:
     - role: download_from_s3
 
-- name: K8s Disaster Recovery - Restore etcd
+- name: K8s Disaster Recovery - Restore Control Plane Core Data
   hosts: master
   become: yes
   gather_facts: yes
@@ -14,8 +14,16 @@
     - role: restore_etcd
     - role: restore_pki
     - role: restore_configs
+
+- name: K8s Disaster Recovery - Restore Static Pods & Restart Cluster Nodes
+  hosts: all
+  become: yes
+  gather_facts: yes
+  roles:
+    - role: restore_static_pods
+
   post_tasks:
-    - name: Final Step - Force Restart Kubelet to apply all new configurations and certificates
+    - name: Final Step - Force Restart Kubelet on all nodes
       ansible.builtin.systemd:
         name: kubelet
         state: restarted

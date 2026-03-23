@@ -1,0 +1,38 @@
+---
+# tasks file for roles/restore_static_pods
+- name: Check if static pods backup exists locally for this node
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/{{ backup_folder_name }}/static_pods/manifests_{{ ansible_hostname }}.tar.gz"
+  delegate_to: localhost
+  become: no
+  register: local_manifest_file
+
+- name: Fail if no manifest backup found locally
+  ansible.builtin.fail:
+    msg: "No manifest backup found for {{ ansible_hostname }}!"
+  when: not local_manifest_file.stat.exists
+  delegate_to: localhost
+  become: no
+
+- name: Ensure backup directory exists on target node
+  ansible.builtin.file:
+    path: /opt/backup
+    state: directory
+    mode: '0755'
+
+- name: Copy manifest backup to target node
+  ansible.builtin.copy:
+    src: "{{ local_manifest_file.stat.path }}"
+    dest: "/opt/backup/manifests_{{ ansible_hostname }}.tar.gz"
+
+- name: Ensure manifests directory exists
+  ansible.builtin.file:
+    path: /etc/kubernetes/manifests
+    state: directory
+    mode: '0755'
+
+- name: Extract Manifests Backup directly to manifests folder
+  ansible.builtin.unarchive:
+    src: "/opt/backup/manifests_{{ ansible_hostname }}.tar.gz"
+    dest: /etc/kubernetes/manifests/
+    remote_src: yes
