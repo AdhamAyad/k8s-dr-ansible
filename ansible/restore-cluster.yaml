@@ -12,3 +12,4 @@
   gather_facts: yes
   roles:
     - role: restore_etcd
+    - role: restore_pki

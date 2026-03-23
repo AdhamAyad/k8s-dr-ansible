@@ -1,0 +1,38 @@
+---
+# tasks file for roles/restore_pki
+- name: Find the PKI backup file on Ansible host
+  ansible.builtin.find:
+    paths: "{{ playbook_dir }}/{{ backup_folder_name }}/pki"
+    patterns: "*.tar.gz"
+  delegate_to: localhost
+  become: no
+  register: pki_local_file
+
+- name: Fail if no PKI backup found locally
+  ansible.builtin.fail:
+    msg: "No PKI backup tar.gz found in the {{ backup_folder_name }}/pki directory!"
+  when: pki_local_file.matched == 0
+  delegate_to: localhost
+  become: no
+
+- name: Ensure backup directory exists on Master
+  ansible.builtin.file:
+    path: /opt/backup
+    state: directory
+    mode: '0755'
+
+- name: Copy PKI backup to Master node
+  ansible.builtin.copy:
+    src: "{{ pki_local_file.files[0].path }}"
+    dest: /opt/backup/pki_backup.tar.gz
+
+- name: Backup current/corrupted PKI directory
+  ansible.builtin.command: mv /etc/kubernetes/pki /etc/kubernetes/pki_backup_{{ ansible_date_time.iso8601_basic_short }}
+  ignore_errors: yes
+
+- name: Extract PKI Backup to /etc/kubernetes/
+  ansible.builtin.unarchive:
+    src: /opt/backup/pki_backup.tar.gz
+    dest: /etc/kubernetes/
+    remote_src: yes
+  notify: Restart Kubelet
