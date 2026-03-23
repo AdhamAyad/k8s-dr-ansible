@@ -13,3 +13,9 @@
   roles:
     - role: restore_etcd
     - role: restore_pki
+  post_tasks:
+    - name: Final Step - Force Restart Kubelet to apply all new configurations and certificates
+      ansible.builtin.systemd:
+        name: kubelet
+        state: restarted
+        daemon_reload: yes

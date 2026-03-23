@@ -35,4 +35,3 @@
     src: /opt/backup/pki_backup.tar.gz
     dest: /etc/kubernetes/
     remote_src: yes
-  notify: Restart Kubelet

@@ -65,4 +65,3 @@
 
 - name: Step 5 - Restart the ETCD Pod
   ansible.builtin.command: mv /tmp/etcd.yaml /etc/kubernetes/manifests/
-  notify: Restart Kubelet
