@@ -36,7 +36,7 @@
     seconds: 10
 
 - name: Step 2 - Extract the Snapshot to a New Directory
-  ansible.builtin.command: etcdutl snapshot restore /opt/backup/etcd-snapshot.db --data-dir /var/lib/etcd-restored
+  ansible.builtin.shell: /usr/local/bin/etcdctl snapshot restore /opt/backup/etcd-snapshot.db --data-dir /var/lib/etcd-restored
 
 - name: Step 3 - Clear the Corrupted Data Directory
   ansible.builtin.shell: rm -rf /var/lib/etcd/*
