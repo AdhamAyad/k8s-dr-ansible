@@ -1,0 +1,49 @@
+---
+# tasks file for roles/restore_etcd
+- name: Find the etcd snapshot file on Ansible host
+  ansible.builtin.find:
+    paths: "{{ playbook_dir }}/{{ backup_folder_name }}/etcd"
+    patterns: "*.db"
+  delegate_to: localhost
+  become: no
+  register: local_snapshot_files
+
+- name: Fail if no snapshot found locally
+  ansible.builtin.fail:
+    msg: "No .db file found in the {{ backup_folder_name }}/etcd directory!"
+  when: local_snapshot_files.matched == 0
+  delegate_to: localhost
+  become: no
+
+- name: Ensure backup directory exists on Master
+  ansible.builtin.file:
+    path: /opt/backup
+    state: directory
+    mode: '0755'
+
+- name: Copy ETCD snapshot to Master node
+  ansible.builtin.copy:
+    src: "{{ local_snapshot_files.files[0].path }}"
+    dest: /opt/backup/etcd-snapshot.db
+    mode: '0600'
+
+- name: Step 1 - Stop the ETCD Pod
+  ansible.builtin.command: mv /etc/kubernetes/manifests/etcd.yaml /tmp/
+  ignore_errors: yes
+
+- name: Wait 10 seconds to ensure ETCD pod is fully terminated
+  ansible.builtin.pause:
+    seconds: 10
+
+- name: Step 2 - Extract the Snapshot to a New Directory
+  ansible.builtin.command: etcdutl snapshot restore /opt/backup/etcd-snapshot.db --data-dir /var/lib/etcd-restored
+
+- name: Step 3 - Clear the Corrupted Data Directory
+  ansible.builtin.shell: rm -rf /var/lib/etcd/*
+
+- name: Step 4 - Copy the Backup Data to the Original Path
+  ansible.builtin.shell: cp -a /var/lib/etcd-restored/* /var/lib/etcd/
+
+- name: Step 5 - Restart the ETCD Pod
+  ansible.builtin.command: mv /tmp/etcd.yaml /etc/kubernetes/manifests/
+  notify: Restart Kubelet

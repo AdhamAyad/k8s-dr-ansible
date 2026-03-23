@@ -1,0 +1,7 @@
+---
+# handlers file for roles/restore_etcd
+- name: Restart Kubelet
+  ansible.builtin.systemd:
+    name: kubelet
+    state: restarted
+    daemon_reload: yes
