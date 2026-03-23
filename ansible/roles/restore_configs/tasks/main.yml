@@ -1,0 +1,33 @@
+---
+# tasks file for roles/restore_configs
+- name: Find the Configs backup file on Ansible host
+  ansible.builtin.find:
+    paths: "{{ playbook_dir }}/{{ backup_folder_name }}/configs"
+    patterns: "*.tar.gz"
+  delegate_to: localhost
+  become: no
+  register: configs_local_file
+
+- name: Fail if no Configs backup found locally
+  ansible.builtin.fail:
+    msg: "No Configs backup tar.gz found in the {{ backup_folder_name }}/configs directory!"
+  when: configs_local_file.matched == 0
+  delegate_to: localhost
+  become: no
+
+- name: Ensure backup directory exists on Master
+  ansible.builtin.file:
+    path: /opt/backup
+    state: directory
+    mode: '0755'
+
+- name: Copy Configs backup to Master node
+  ansible.builtin.copy:
+    src: "{{ configs_local_file.files[0].path }}"
+    dest: /opt/backup/configs_backup.tar.gz
+
+- name: Extract Configs Backup to Root Directory (/)
+  ansible.builtin.unarchive:
+    src: /opt/backup/configs_backup.tar.gz
+    dest: /
+    remote_src: yes
