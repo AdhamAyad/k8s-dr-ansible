@@ -36,3 +36,16 @@
     src: "/opt/backup/manifests_{{ ansible_hostname }}.tar.gz"
     dest: /etc/kubernetes/manifests/
     remote_src: yes
+
+- name: Force API Server to refresh Static Pods
+  block:
+    - name: Temporarily move manifests out
+      ansible.builtin.shell: "mv /etc/kubernetes/manifests/*.yaml /tmp/"
+    
+    - name: Wait for Kubelet to register the deletion
+      ansible.builtin.pause:
+        seconds: 10
+
+    - name: Move manifests back to trigger fresh creation
+      ansible.builtin.shell: "mv /tmp/*.yaml /etc/kubernetes/manifests/"
+  become: yes
